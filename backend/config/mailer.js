@@ -1,4 +1,4 @@
-const nodemailer = require("nodemailer");
+import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -8,11 +8,15 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-transporter.verify((error, success) => {
-  if (error) {
-    console.log("Mailer error", error);
-  } else {
-    console.log("Mailer ready");
-  }
-});
-module.exports = transporter;
+// const verifyMailer = async () => {
+//   try {
+//     await transporter.verify();
+//     console.log("Mailer ready");
+//   } catch (error) {
+//     console.log("Mailer error", error);
+//   }
+// };
+
+// verifyMailer()
+
+export default transporter;
