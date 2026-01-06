@@ -1,10 +1,10 @@
-const User = require("../models/User");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
-const transporter = require("../config/mailer");
+import User from "../models/User.js"
+import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
+import crypto from "crypto"
+import transporter from "../config/mailer.js";
 
-exports.register = async (req, res) => {
+export const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -40,7 +40,7 @@ exports.register = async (req, res) => {
     const verifyLink = `http://localhost:3000/api/auth/verify-email/${verifyToken}`;
 
     await transporter.sendMail({
-      from: `"Auth App" <${process.env.EMAIL_USER}>`,
+      from: `<${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Verify your email",
       html: `
@@ -51,15 +51,14 @@ exports.register = async (req, res) => {
     });
 
     res.status(201).json({
-      message:
-        "Registration successful. Please check your email to verify your account.",
+      message:"Registration successful. Please check your email to verify your account.",
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 };
 
-exports.verifyEmail = async (req, res) => {
+export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -84,7 +83,7 @@ exports.verifyEmail = async (req, res) => {
   }
 };
 
-exports.login = async (req, res) => {
+export const login = async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body;
 
@@ -119,7 +118,7 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.forgetPassword = async (req, res) => {
+export const forgetPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
@@ -140,7 +139,7 @@ exports.forgetPassword = async (req, res) => {
   }
 };
 
-exports.resetPassword = async (req, res) => {
+export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
