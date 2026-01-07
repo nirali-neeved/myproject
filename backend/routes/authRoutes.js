@@ -1,19 +1,21 @@
 import express from "express";
+import validate from "../middleware/validateMiddleware.js";
 
 import {
   register,
   login,
-  verifyEmail,
+  forgotPassword,
   resetPassword,
-  forgetPassword,
+  verifyEmail,
 } from "../controllers/authController.js";
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from "../validations/authValidations.js";
 
 const router = express.Router();
 
-router.post("/register", register);
-router.post("/login", login);
+router.post("/register", validate(registerSchema), register);
+router.post("/login", validate(loginSchema), login);
+router.post("/forgot-password", validate(forgotPasswordSchema), forgotPassword);
+router.post("/reset-password", validate(resetPasswordSchema), resetPassword);
 router.get("/verify-email/:token", verifyEmail);
-router.post("/forget-password", forgetPassword);
-router.post("/reset-password", resetPassword);
 
 export default router;

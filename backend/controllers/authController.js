@@ -1,145 +1,108 @@
-import User from "../models/User.js"
-import bcrypt from "bcryptjs"
-import jwt from "jsonwebtoken"
-import crypto from "crypto"
-import transporter from "../config/mailer.js";
+import User from "../models/User.js";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import catchAsync from "../utils/catchAsync.js";
+import { comparePassword, hashPassword } from "../utils/hashingHelper.js";
+import { sendMail } from "../utils/emailHelper.js";
+import { otpHelper } from "../utils/otpHelper.js";
 
-export const register = async (req, res) => {
+export const register = catchAsync(async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
 
-    if (!username || !email || !password) {
-      return res.status(400).json({
-        errors: {
-          username: !username ? "Username is required" : "",
-          email: !email ? "Email is required" : "",
-          password: !password ? "Password is required" : "",
-        },
-      });
-    }
-
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
-      return res.status(400).json({
-        errors: { email: "Email already exists" },
-      });
+      const error = new Error("Email already exists");
+      error.statusCode = 400;
+      return next(error);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
     const verifyToken = crypto.randomBytes(32).toString("hex");
 
-    const user = await User.create({
+    await User.create({
       username,
       email,
       password: hashedPassword,
       emailverifyToken: verifyToken,
       emailverifyExpire: Date.now() + 5 * 60 * 1000,
-      isVerified: false,
     });
 
-    const verifyLink = `http://localhost:3000/api/auth/verify-email/${verifyToken}`;
+    const verifyLink = `${process.env.BASE_URL}/api/auth/verify-email/${verifyToken}`;
+    await sendMail(
+      email,
+      "Verify your email",
+      `<a href="${verifyLink}">Verify Now</a>`
+    );
 
-    await transporter.sendMail({
-      from: `<${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Verify your email",
-      html: `
-        <h2>Hello ${username}</h2>
-        <p>Please verify your email by clicking the link below:</p>
-        <a href="${verifyLink}">Verify Email</a>
-      `,
-    });
-
-    res.status(201).json({
-      message:"Registration successful. Please check your email to verify your account.",
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res
+      .status(201)
+      .json({ message: "Registration successful. Check your email." });
+  } catch (error) {
+    console.error(error);
+    throw new Error(error.message);
   }
-};
+});
 
-export const verifyEmail = async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    const user = await User.findOne({
-      emailverifyToken: token,
-      emailverifyExpire: { $gt: Date.now() },
-    });
-
-    if (!user) {
-      return res.status(400).json({ message: "Invalid or expired link" });
-    }
-
-    user.isVerified = true;
-    user.emailverifyToken = null;
-    user.emailverifyExpire = null;
-
-    await user.save();
-
-    res.json({ message: "Email verified successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-export const login = async (req, res) => {
+export const login = catchAsync(async (req, res, next) => {
   try {
     const { emailOrUsername, password } = req.body;
-
-    if (!emailOrUsername || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
 
     const user = await User.findOne({
       $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
     });
 
-    if (!user) return res.status(400).json({ message: "User not found" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid password" });
+    if (!user || !(await comparePassword(password, user.password))) {
+      const error = new Error("Invalid Password");
+      error.statusCode = 400;
+      return next(error);
     }
 
     if (!user.isVerified) {
-      return res
-        .status(401)
-        .json({ message: "Please verify your email first" });
+      const error = new Error("Verify your email");
+      error.statusCode = 401;
+      return next(error);
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
-
     res.json({ message: "Login successful", token });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
+  } catch (error) {
+    console.error(error);
+    throw new Error(error.message);
   }
-};
+});
 
-export const forgetPassword = async (req, res) => {
+export const forgotPassword = catchAsync(async (req, res, next) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "USer not found" });
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    if (!user) {
+      const error = new Error("Invalid email,Not exisiting email");
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const otp = otpHelper(6);
     user.resetOtp = otp;
     user.resetOtpExpire = Date.now() + 3 * 60 * 1000;
     await user.save();
-    await transporter.sendMail({
-      from: `"Auth App" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Reset password OTP",
-      html: `<p>Your reset password OTP is <strong>${otp}</strong>valid for 3 minutes.</p>`,
-    });
-    res.json({ message: "OTP sent to email" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
-export const resetPassword = async (req, res) => {
+    await sendMail(
+      email,
+      "Reset Password OTP",
+      `<p>Your OTP is <b>${otp}</b></p>`
+    );
+    res.json({ message: "OTP sent to email" });
+  } catch (error) {
+    console.error(error);
+    throw new Error(error.message);
+  }
+});
+
+export const resetPassword = catchAsync(async (req, res, next) => {
   try {
     const { email, otp, newPassword } = req.body;
 
@@ -149,17 +112,47 @@ export const resetPassword = async (req, res) => {
       resetOtpExpire: { $gt: Date.now() },
     });
 
-    if (!user)
-      return res.status(400).json({ message: "Invalid or expire OTP" });
+    if (!user) {
+      const error = new Error("Expired OTP");
+      error.statusCode = 400;
+      return next(error);
+    }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = await hashPassword(newPassword);
     user.resetOtp = null;
     user.resetOtpExpire = null;
 
     await user.save();
-
     res.json({ message: "Password reset successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
+  } catch (error) {
+    console.error(error);
+    throw new Error(error.message);
   }
-};
+});
+
+export const verifyEmail = catchAsync(async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      emailverifyToken: token,
+      emailverifyExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      const error = new Error("Expired verification link");
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    user.isVerified = true;
+    user.emailverifyToken = undefined;
+    user.emailverifyExpire = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "Email verified successfully" });
+  } catch (error) {
+    console.error(error);
+    throw new Error(error.message);
+  }
+});
