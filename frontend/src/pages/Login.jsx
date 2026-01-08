@@ -1,81 +1,142 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Link,useNavigate } from "react-router-dom";
+import axios from "axios";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+
+const loginSchema = z.object({
+  emailOrUsername: z.string().min(1, "Email or Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
 
 const Login = () => {
-  const [form, setForm] = useState({ emailOrUsername: "", password: "" });
-  const [msg, setMsg] = useState("");
+  const [serverMsg, setServerMsg] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setForm({ emailOrUsername: "", password: "" });
+  const navigate = useNavigate();
 
-    const res = await fetch("http://localhost:3000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+  const form = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      emailOrUsername: "",
+      password: "",
+    },
+  });
 
-    const data = await res.json();
-    if (!res.ok) return setMsg(data.message);
+  const onSubmit = async (values) => {
+    setServerMsg("");
+    setIsSuccess(false);
 
-    localStorage.setItem("token", data.token);
-    setMsg("Login successful");
+    try {
+      const { data } = await axios.post(
+        "http://localhost:5000/api/auth/login",
+        values
+      );
+      localStorage.setItem("token", data.token);
+      setServerMsg("Login successful");
+      setIsSuccess(true);
+      form.reset();
+      navigate("/dashboard");
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setServerMsg(error.response?.data?.message || "Login failed");
+      } else {
+        setServerMsg("Network error. Please try again.");
+      }
+      setIsSuccess(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 w-96 rounded shadow"
-      >
-        <h2 className="text-xl font-bold mb-4">Login</h2>
+    <div className="min-h-screen flex items-center justify-center">
+      <Card className="w-[380px]">
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="emailOrUsername"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email or Username</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Email/Username" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <input
-          className="w-full p-2 border mb-3"
-          placeholder="Email or Username"
-          value={form.emailOrUsername}
-          onChange={(e) =>
-            setForm({ ...form, emailOrUsername: e.target.value })
-          }
-        />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="Password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <input
-          type="password"
-          className="w-full p-2 border mb-3"
-          placeholder="Password"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
+              {serverMsg && (
+                <p
+                  className={`text-sm ${
+                    isSuccess ? "text-green-600" : "text-red-500"
+                  }`}
+                >
+                  {serverMsg}
+                </p>
+              )}
 
-        <button className="w-full bg-blue-500 text-white py-2 rounded">
-          Login
-        </button>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting ? "Login" : "Login"}
+              </Button>
+            </form>
+          </Form>
 
-        {msg && (
-          <p className={`mt-3 ${res.ok ? "text-green-600" : "text-red-500"}`}>
-            {msg}
+          <p className="text-sm text-right mt-2">
+            <Link
+              to="/forgot-password"
+              className="text-primary hover:underline"
+            >
+              Forgot Password?
+            </Link>
           </p>
-        )}
 
-        <p className="text-sm mt-3">
-          <Link to="/forget-password" className="text-blue-500">
-            Forgot Password?
-          </Link>
-        </p>
-
-        <p className="text-sm mt-2">
-          <Link to="/reset-password" className="text-blue-500">
-            Reset Password
-          </Link>
-        </p>
-
-        <p className="mt-4 text-sm">
-          No account? 
-          <Link to="/register" className="text-blue-500">
-            Register
-          </Link>
-        </p>
-      </form>
+          <p className="mt-4 text-sm text-center border-t pt-6">
+            No account?{" "}
+            <Link
+              to="/register"
+              className="text-primary font-semibold underline"
+            >
+              Register
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -1,83 +1,142 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "react-router-dom";
+import axios from "axios";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const schema = z.object({
-  username: z.string().min(3, "Username required (min 3 chars)"),
-  email: z.string().email("Invalid email"),
+const registerSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address"),
   password: z
     .string()
-    .min(8, "Min 8 characters")
-    .regex(/[A-Z]/, "One uppercase required")
-    .regex(/[0-9]/, "One number required"),
+    .min(8, "Minimum 8 characters")
+    .regex(/[A-Z]/, "One uppercase letter required")
+    .regex(/\d/, "One number required")
+    .regex(/[\W_]/, "One special character required"),
 });
 
 const Register = () => {
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const [errors, setErrors] = useState({});
-  const [msg, setMsg] = useState("");
+  const [serverError, setServerError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrors({});
-    setMsg("");
-    setForm({username: "", email: "", password: ""});
+  const form = useForm({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  const onSubmit = async (values) => {
+    setServerError("");
+    setSuccessMsg("");
 
     try {
-      schema.parse(form);
-    } catch (err) {
-      const fieldErrors = {};
-      err.issues.forEach((i) => (fieldErrors[i.path[0]] = i.message));
-      return setErrors(fieldErrors);
+      const { data } = await axios.post(
+        "http://localhost:5000/api/auth/register",
+        values
+      );
+      setSuccessMsg("Verification email sent, check your email");
+      form.reset();
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setServerError(error.response?.data?.message || "Registration failed");
+      } else {
+        setServerError("Network error. Please try again.");
+      }
     }
-
-    const res = await fetch("http://localhost:3000/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    const data = await res.json();
-    if (!res.ok) return setErrors(data.errors || {});
-    setMsg(data.message);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 w-96 rounded shadow"
-      >
-        <h2 className="text-xl font-bold mb-4">Register</h2>
+    <div className="min-h-screen flex items-center justify-center">
+      <Card className="w-[380px]">
+      <CardHeader>
+          <CardTitle className="text-center text-2xl font-bold">
+            Register
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Username</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Username" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        {["username", "email", "password"].map((field) => (
-          <div key={field} className="mb-3">
-            <input
-              type={field === "password" ? "password" : "text"}
-              placeholder={field}
-              value={form[field]}
-              onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-              className="w-full p-2 border rounded"
-            />
-            {errors[field] && (
-              <p className="text-red-500 text-sm">{errors[field]}</p>
-            )}
-          </div>
-        ))}
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <button className="w-full bg-blue-500 text-white py-2 rounded">
-          Register
-        </button> 
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        {msg && <p className="text-green-600 mt-3">{msg}</p>}
+              {serverError && (
+                <p className="text-red-500 text-sm">{serverError}</p>
+              )}
+              {successMsg && (
+                <p className="text-green-600 text-sm">{successMsg}</p>
+              )}
 
-        <p className="mt-4 text-sm">
-          Already have account?
-          <Link to="/login" className="text-blue-500">
-            Login
-          </Link>
-        </p>
-      </form>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting ? "Register" : "Register"}
+              </Button>
+            </form>
+          </Form>
+          <p className="text-sm text-center mt-4">
+            Already registered?{" "}
+            <Link to="/login" className="text-primary underline font-semibold">
+              Login
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };
