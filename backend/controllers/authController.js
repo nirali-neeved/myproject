@@ -1,3 +1,4 @@
+import logger from "../utils/logger.js";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -12,6 +13,7 @@ export const register = catchAsync(async (req, res, next) => {
 
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
+      logger.warn('Registration failed email already exists')
       const error = new Error("Email already exists");
       error.statusCode = 400;
       return next(error);
@@ -35,11 +37,12 @@ export const register = catchAsync(async (req, res, next) => {
       `<a href="${verifyLink}">Verify Now</a>`
     );
 
+    logger.info('Registration succesful and check your email')
     res
       .status(201)
       .json({ message: "Registration successful. Check your email." });
   } catch (error) {
-    console.error(error);
+    logger.error(error,"Error in register");
     throw new Error(error.message);
   }
 });
@@ -53,12 +56,14 @@ export const login = catchAsync(async (req, res, next) => {
     });
 
     if (!user || !(await comparePassword(password, user.password))) {
+      logger.warn("Failed login")
       const error = new Error("Invalid Password");
       error.statusCode = 400;
       return next(error);
     }
 
     if (!user.isVerified) {
+      logger.warn("Verified your emmail first")
       const error = new Error("Verify your email");
       error.statusCode = 401;
       return next(error);
@@ -67,9 +72,10 @@ export const login = catchAsync(async (req, res, next) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
+    logger.info("User Login sucessful")
     res.json({ message: "Login successful", token });
   } catch (error) {
-    console.error(error);
+    logger.error(error,"Error in login");
     throw new Error(error.message);
   }
 });
@@ -80,6 +86,7 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
+      logger.warn("Invalid email")
       const error = new Error("Invalid email,Not exisiting email");
       error.statusCode = 404;
       return next(error);
@@ -95,9 +102,10 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
       "Reset Password OTP",
       `<p>Your OTP is <b>${otp}</b></p>`
     );
+    logger.info("OTP generated and sent to email")
     res.json({ message: "OTP sent to email" });
   } catch (error) {
-    console.error(error);
+    logger.error(error,"Error in forgotpassword");
     throw new Error(error.message);
   }
 });
@@ -113,6 +121,7 @@ export const resetPassword = catchAsync(async (req, res, next) => {
     });
 
     if (!user) {
+      logger.warn("Expired OTP")
       const error = new Error("Expired OTP");
       error.statusCode = 400;
       return next(error);
@@ -123,9 +132,10 @@ export const resetPassword = catchAsync(async (req, res, next) => {
     user.resetOtpExpire = null;
 
     await user.save();
+    logger.info("Password reset sucessful")
     res.json({ message: "Password reset successfully" });
   } catch (error) {
-    console.error(error);
+    logger.error(error,"Error in resetpassword");
     throw new Error(error.message);
   }
 });
@@ -140,6 +150,7 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
     });
 
     if (!user) {
+      logger.warn("Expired verification link")
       const error = new Error("Expired verification link");
       error.statusCode = 400;
       return next(error);
@@ -150,9 +161,10 @@ export const verifyEmail = catchAsync(async (req, res, next) => {
     user.emailverifyExpire = undefined;
     await user.save();
 
+    logger.info("Email verified successful")
     res.status(200).json({ message: "Email verified successfully" });
   } catch (error) {
-    console.error(error);
+    logger.error(error,"Error in verify email");
     throw new Error(error.message);
   }
 });
